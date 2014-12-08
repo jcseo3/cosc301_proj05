@@ -89,7 +89,6 @@ int main(int argc, char** argv) {
 	usage(argv[0]);
     }
 
-<<<<<<< HEAD
     image_buf = mmap_file(argv[1], &fd); //image_buf is a pointer to the memory-mapped disk image;can pass pointer along other funcs to read and manipulate FS
     bpb = check_bootsector(image_buf); // checks to makes sure bootsector is valid
 
