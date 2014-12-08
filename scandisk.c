@@ -77,7 +77,7 @@ void fix_sFAT(uint16_t startCluster, uint8_t *image_buf, struct bpb33 *bpb, stru
 		correctclusternum+=1;
 	} 
 	//traverse the clusters and undo the EOF on the current EOF and keep traversing until end of numofclusters and make that last FAT EOF 
-	//problem: do I overwrite other clusters or do I jump around? how does this work...? how do I lengthen the chain cluster without overwriting others?
+	//problem: do I overwrite other clusters or do I jump around? how does this work...? how do I lengthen the chain cluster without overwriting others? any thoughts?
 }
 
 
@@ -92,19 +92,9 @@ int main(int argc, char** argv) {
 <<<<<<< HEAD
     image_buf = mmap_file(argv[1], &fd); //image_buf is a pointer to the memory-mapped disk image;can pass pointer along other funcs to read and manipulate FS
     bpb = check_bootsector(image_buf); // checks to makes sure bootsector is valid
-    
-    uint8_t rootdiraddr = *root_dir_addr(image_buf, bpb);
-=======
-    image_buf = mmap_file(argv[1], &fd);
-    bpb = check_bootsector(image_buf);
+
 
     // your code should start here...
-	
-
-
->>>>>>> a7a076d79322c8974e2bdb114b43f15e2be9d723
-
-	//your code should start here...
 
 
     unmmap_file(image_buf, &fd);
