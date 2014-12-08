@@ -15,6 +15,15 @@
 #include "dos.h"
 
 
+void print_indent(int indent)
+{
+    int i;
+    for (i = 0; i < indent*4; i++)
+	printf(" ");
+}
+
+
+
 void usage(char *progname) {
     fprintf(stderr, "usage: %s <imagename>\n", progname);
     exit(1);
@@ -33,7 +42,7 @@ int main(int argc, char** argv) {
     bpb = check_bootsector(image_buf);
 
     // your code should start here...
-
+	
 
 
 
