@@ -20,6 +20,15 @@ Proj05
 #include "dos.h"
 
 
+void print_indent(int indent)
+{
+    int i;
+    for (i = 0; i < indent*4; i++)
+	printf(" ");
+}
+
+
+
 void usage(char *progname) {
     fprintf(stderr, "usage: %s <imagename>\n", progname);
     exit(1);
@@ -80,10 +89,20 @@ int main(int argc, char** argv) {
 	usage(argv[0]);
     }
 
+<<<<<<< HEAD
     image_buf = mmap_file(argv[1], &fd); //image_buf is a pointer to the memory-mapped disk image;can pass pointer along other funcs to read and manipulate FS
     bpb = check_bootsector(image_buf); // checks to makes sure bootsector is valid
     
     uint8_t rootdiraddr = *root_dir_addr(image_buf, bpb);
+=======
+    image_buf = mmap_file(argv[1], &fd);
+    bpb = check_bootsector(image_buf);
+
+    // your code should start here...
+	
+
+
+>>>>>>> a7a076d79322c8974e2bdb114b43f15e2be9d723
 
 	//your code should start here...
 
