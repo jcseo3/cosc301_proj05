@@ -82,6 +82,9 @@ void write_dirent(struct direntry *dirent, char *filename, uint16_t start_cluste
 	putulong(dirent->deFileSize, size);
 }
 
+
+
+
 //gets the current actual length of the cluster chain so that it can be compared to the size value in the directory entry
 int getclusterlen(uint16_t startCluster, uint8_t *image_buf, struct bpb33 *bpb){
 	int clusterlen = 1;
