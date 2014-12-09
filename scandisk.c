@@ -85,6 +85,17 @@ void write_dirent(struct direntry *dirent, char *filename, uint16_t start_cluste
 
 
 
+//get the size of the file that is recorded in the dir entry and convert into the number of clusters there should be in the chain
+//used in main function
+uint32_t getmetanumcluster(struct direntry *dirent){
+	uint32_t size = getulong(dirent->deFileSize);
+	int numcluster = size / 512
+	if ((size % 512) !=0){
+		numcluster+=1;
+	}
+	return numcluster;
+}
+
 //gets the current actual length of the cluster chain so that it can be compared to the size value in the directory entry
 int getclusterlen(uint16_t startCluster, uint8_t *image_buf, struct bpb33 *bpb){
 	int clusterlen = 1;
@@ -97,8 +108,8 @@ int getclusterlen(uint16_t startCluster, uint8_t *image_buf, struct bpb33 *bpb){
 	return clusterlen;
 }
 
-//Fix for when the FAT cluster chain is LONGER than the given correct size in the dir entry 
-void fix_lFAT(uint16_t startCluster, uint8_t *image_buf, struct bpb33 *bpb, uint32_t clusterlen){
+//Fix for when the FAT cluster chain is 'L'ONGER than the given correct size in the dir entry 
+void fix_lcluster(uint16_t startCluster, uint8_t *image_buf, struct bpb33 *bpb, uint32_t clusterlen){
 	//can we always assume there will be at least one cluster? for now, I assumed that we also assume there is always one
 	int clusternum = 1;
 	uint16_t fatent = get_fat_entry(startCluster, image_buf, bpb);
@@ -115,21 +126,18 @@ void fix_lFAT(uint16_t startCluster, uint8_t *image_buf, struct bpb33 *bpb, uint
 	while (!is_end_of_file(fatent)){
 		uint16_t freetemp = fatent;
 		fatent = get_fat_entry(startCluster, image_buf, bpb);
-		set_fat_entry (freetemp, EOF, image_buf, bpb); // I'm don't think setting it to EOF is freeing it, but Idk how to free it.. 		
+		set_fat_entry (freetemp, 0, image_buf, bpb); // not sure if I'm freeing correctly (CLUST_FREE value is 0)
 	}	
 }
 
-//Fix for when the FAT chain cluster is SHORTER than the given correct size in dir entry
-void fix_sFAT(uint16_t startCluster, uint8_t *image_buf, struct bpb33 *bpb, struct direntry *dirent){
-	//get the size that is recorded in the directory entry
-	uint32_t size = getulong(dirent->deFileSize);
-	int correctclusternum = size / 512
-	if ((size % 512) != 0){
-		correctclusternum+=1;
-	} 
-	//traverse the clusters and undo the EOF on the current EOF and keep traversing until end of numofclusters and make that last FAT EOF 
-	//problem: do I overwrite other clusters or do I jump around? how does this work...? how do I lengthen the chain cluster without overwriting others? any thoughts?
+//Fix for when the FAT chain cluster is 'S'HORTER than the given correct size in dir entry
+void fix_scluster(uint16_t startCluster, uint8_t *image_buf, struct bpb33 *bpb, struct direntry *dirent){
+	//get the real length of the cluster chain from the FAT 
+	int clusterlen = getclusterlen (startCluster, image_buf, bpb);
+	//write the actual "correct" size into the dir entry
+	putulong(dirent->deFileSize, (clusterlen * 512)); //check syntax
 }
+
 
 uint16_t print_dirent(struct direntry *dirent, int indent) {
 	// modified from dos_ls.c file
@@ -240,11 +248,19 @@ int main(int argc, char** argv) {
 
     image_buf = mmap_file(argv[1], &fd); //image_buf is a pointer to the memory-mapped disk image;can pass pointer along other funcs to read and manipulate FS
     bpb = check_bootsector(image_buf); // checks to makes sure bootsector is valid
-
-
+    
     // your code should start here...
 	// scan the FAT system and gather data about references
 	traverse_root(image_buf, bpb);
+	 uint8_t rootaddr = root_dir_addr(image_buf, bpb); 
+	 
+	 //recursively traverse the dir entry
+	 
+	 //compare the metadata and the actual length/size of the chain cluster and use functions to fix the inconsistencies accordingly
+	 
+	 //remember to update the reference counter array
+
+
 
     unmmap_file(image_buf, &fd);
     return 0;
