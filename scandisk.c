@@ -290,10 +290,12 @@ void follow_dir(uint16_t cluster, int indent, uint8_t *image_buf, struct bpb33* 
 		for ( ; i < numDirEntries; i++) {
 			uint16_t followclust = print_dirent(dirent, indent);	
 			// check the size and fix problems for each file
-			check_cluster_size(dirent, image_buf, bpb);
-			
-        	if (followclust)
+			if (followclust != 0) {
+				check_cluster_size(dirent, image_buf, bpb);
+			}
+        	if (followclust){
         		follow_dir(followclust, indent+1, image_buf, bpb);
+        	}
         	dirent++;
 		}
 		cluster = get_fat_entry(cluster, image_buf, bpb);
@@ -309,10 +311,13 @@ void traverse_root(uint8_t *image_buf, struct bpb33* bpb){
 	
 	int i = 0;
 	for ( ; i < bpb->bpbRootDirEnts; i++) {
-		uint16_t followclust = print_dirent(dirent, 0);
 		
+		
+		uint16_t followclust = print_dirent(dirent, 0);
+		if (followclust != 0) {
 		// check the size of the file
-		check_cluster_size(dirent, image_buf, bpb);
+			check_cluster_size(dirent, image_buf, bpb);
+		}
 		
 		if (is_valid_cluster(followclust, bpb)) {
 			follow_dir(followclust, 1, image_buf, bpb);
@@ -338,7 +343,7 @@ int main(int argc, char** argv) {
 	traverse_root(image_buf, bpb);
 
 	 
-	 //recursively traverse the dir entry
+	//recursively traverse the dir entry
 	 
 	 //compare the metadata and the actual length/size of the chain cluster and use functions to fix the inconsistencies accordingly
 	 
