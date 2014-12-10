@@ -109,7 +109,7 @@ void create_dirent(struct direntry *dirent, char *filename, uint16_t start_clust
 }
 
 
-// modified from dos_ls.c file
+// from dos_ls.c file
 uint16_t print_dirent(struct direntry *dirent, int indent) {
 	uint16_t followclust = 0;
 	
@@ -191,15 +191,55 @@ uint16_t print_dirent(struct direntry *dirent, int indent) {
 }
 
 
-//get the size of the file that is recorded in the dir entry and convert into the number of clusters there should be in the chain
-//used in main function
-uint32_t getmetanumcluster(struct direntry *dirent){
-	uint32_t size = getulong(dirent->deFileSize);
-	int numcluster = size / 512;
-	if ((size % 512) !=0){
-		numcluster+=1;
+
+// checks if the current entry is a file
+uint16_t is_file(struct direntry *dirent, int indent) {
+	uint16_t followclust = 0;
+	
+
+	char name[9];
+	name[8] = ' ';
+	memcpy(name, &(dirent->deName[0]), 8);
+	
+	if (name[0] == SLOT_EMPTY) {
+		return followclust;
 	}
-	return numcluster;
+	
+	// skip over deleted entries
+	if (((uint8_t)name[0]) == SLOT_DELETED) {
+		return followclust;
+	}
+	
+	if (((uint8_t)name[0]) == 0x2E) {
+		// dot entry ("." or "..")
+		// skip it
+		return followclust;
+	}
+	
+	
+	if ((dirent->deAttributes & ATTR_WIN95LFN) == ATTR_WIN95LFN) {
+		// ignore any long file name extension entries
+		//
+		// printf("Win95 long-filename entry seq 0x%0x\n", dirent->deName[0]);
+    }
+    else if ((dirent->deAttributes & ATTR_VOLUME) != 0) {
+		printf("Volume: %s\n", name);
+    } 
+    else if ((dirent->deAttributes & ATTR_DIRECTORY) != 0) {
+        // don't deal with hidden directories; MacOS makes these
+        // for trash directories and such; just ignore them.
+		if ((dirent->deAttributes & ATTR_HIDDEN) != ATTR_HIDDEN) {
+		
+        }
+    }
+    else {
+    	/*
+    	 * a "regular" file entry
+    	 * print attributes, size, starting cluster, etc.
+    	 */
+    	 followclust = 1;
+    }
+    return followclust;
 }
 
 //gets the current actual length of the cluster chain so that it can be compared to the size value in the directory entry
@@ -296,7 +336,7 @@ void follow_dir(uint16_t cluster, int indent, uint8_t *image_buf, struct bpb33* 
 			uint16_t followclust = print_dirent(dirent, indent);	
 			
 			// check the size and fix problems for each file; don't fix anything if it isn't a file 
-			if (followclust != 0) {
+			if (is_file(dirent, 0) == 0) {
 				check_cluster_size(dirent, image_buf, bpb, refarr);
 			}
 			
@@ -323,7 +363,7 @@ void traverse_root(uint8_t *image_buf, struct bpb33* bpb, int *refarr){
 		
 		uint16_t followclust = print_dirent(dirent, 0);
 		
-		if (followclust != 0) {
+		if (is_file(dirent, 0) == 1) {
 		// check the size of the file
 			check_cluster_size(dirent, image_buf, bpb, refarr);
 		}
