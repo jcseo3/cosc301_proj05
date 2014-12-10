@@ -12,6 +12,8 @@ Proj05
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <string.h>
+#include <ctype.h>
+
 
 #include "bootsect.h"
 #include "bpb.h"
@@ -95,7 +97,7 @@ void create_dirent(struct direntry *dirent, char *filename, uint16_t start_clust
 			dirent++;
 			// make sure the next dirent is set to be empty, just in case it wasn't before
 			memset((uint8_t *)dirent, 0, sizeof(struct direntry));
-			dirent->deName[0] == SLOT_EMPTY;
+			dirent->deName[0] = SLOT_EMPTY;
 			return;
 		}
 		if (dirent->deName[0] == SLOT_DELETED) {
@@ -118,7 +120,7 @@ uint16_t print_dirent(struct direntry *dirent, int indent) {
 	uint32_t size;
 	uint16_t file_cluster;
 	name[8] = ' ';
-	extension[3] ' ';
+	extension[3] = ' ';
 	memcpy(name, &(dirent->deName[0]), 8);
 	memcpy(extension, dirent->deExtension, 3);
 	
@@ -195,7 +197,7 @@ uint16_t print_dirent(struct direntry *dirent, int indent) {
 //used in main function
 uint32_t getmetanumcluster(struct direntry *dirent){
 	uint32_t size = getulong(dirent->deFileSize);
-	int numcluster = size / 512
+	int numcluster = size / 512;
 	if ((size % 512) !=0){
 		numcluster+=1;
 	}
@@ -262,9 +264,9 @@ void check_cluster_size(struct direntry *dirent, uint8_t *image_buf, struct bpb3
 	uint32_t expectedClusterLen = (size % 512) ? (size / 512 + 1) : (size / 512);
 	
 	
-	if (clusterlen != expectedChainLen) {
-		printf("FAT INCONSISTENT: expected a chain length of %u clusters, actual chain length is %u clusters.\n");
-		if (clusterlen > expectedChainLeng) {
+	if (clusterlen != expectedClusterLen) {
+		printf("FAT INCONSISTENT: expected a chain length of %u clusters, actual chain length is %d clusters.\n", expectedClusterLen, clusterlen);
+		if (clusterlen > expectedClusterLen) {
 			// fixes the FAT chain if the expected chain is longer than the actual chain
 			fix_lcluster(startCluster, image_buf, bpb, expectedClusterLen);
 		}
@@ -300,7 +302,7 @@ void follow_dir(uint16_t cluster, int indent, uint8_t *image_buf, struct bpb33* 
 
 
 // from dos_ls.c file
-void traverse_root(uint8)t *image_buf, struct bpb33* bpb){
+void traverse_root(uint8_t *image_buf, struct bpb33* bpb){
 	uint16_t cluster = 0;
 	
 	struct direntry *dirent = (struct direntry *)cluster_to_addr(cluster, image_buf, bpb);
@@ -313,7 +315,7 @@ void traverse_root(uint8)t *image_buf, struct bpb33* bpb){
 		check_cluster_size(dirent, image_buf, bpb);
 		
 		if (is_valid_cluster(followclust, bpb)) {
-			follow_dir(followclust, 1, image_buf, bpb, references);
+			follow_dir(followclust, 1, image_buf, bpb);
 		}
 		dirent++;
 	}
