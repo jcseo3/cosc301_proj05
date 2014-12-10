@@ -21,7 +21,6 @@ Proj05
 #include "fat.h"
 #include "dos.h"
 
-
 void print_indent(int indent)
 {
     int i;
@@ -87,7 +86,7 @@ void write_dirent(struct direntry *dirent, char *filename, uint16_t start_cluste
 }
 
 // from dos_co.file
-// finds a free slot in the directory, adn write the directory entry
+// finds a free slot in the directory, and writes the directory entry
 void create_dirent(struct direntry *dirent, char *filename, uint16_t start_cluster, uint32_t size, uint8_t *image_buf, struct bpb33 *bpb) {
 
 	while (1) {
@@ -192,7 +191,6 @@ uint16_t print_dirent(struct direntry *dirent, int indent) {
 }
 
 
-
 //get the size of the file that is recorded in the dir entry and convert into the number of clusters there should be in the chain
 //used in main function
 uint32_t getmetanumcluster(struct direntry *dirent){
@@ -205,23 +203,22 @@ uint32_t getmetanumcluster(struct direntry *dirent){
 }
 
 //gets the current actual length of the cluster chain so that it can be compared to the size value in the directory entry
-int getclusterlen(uint16_t startCluster, uint8_t *image_buf, struct bpb33 *bpb){
+int getclusterlen(uint16_t startCluster, uint8_t *image_buf, struct bpb33 *bpb, int *refarr){
 	int clusterlen = 1;
 	uint16_t fatent = get_fat_entry(startCluster, image_buf, bpb);
-
 	while (!is_end_of_file(fatent)){
-		fatent = get_fat_entry(startCluster, image_buf, bpb);
+		refarr[fatent]++;
+		fatent = get_fat_entry(fatent, image_buf, bpb);
 		clusterlen++;
 	}
 	return clusterlen;
 }
 
 
-
-
 // fix for when the FAT cluster chain is 'L'ONGER than the given correct size in the dir entry 
-void fix_lcluster(uint16_t startCluster, uint8_t *image_buf, struct bpb33 *bpb, uint32_t clusterlen){
+void fix_lcluster(uint16_t startCluster, uint8_t *image_buf, struct bpb33 *bpb, uint32_t clusterlen, int *refarr){
 	int clusternum = 1;
+	
 	uint16_t prevfat = startCluster;
 	uint16_t fatent = get_fat_entry(startCluster, image_buf, bpb);
 	
@@ -236,6 +233,7 @@ void fix_lcluster(uint16_t startCluster, uint8_t *image_buf, struct bpb33 *bpb, 
 	fatent =  get_fat_entry(fatent, image_buf, bpb);
 	while (!is_end_of_file(fatent)){
 		uint16_t freetemp = fatent;
+		refarr[fatent]--;
 		fatent = get_fat_entry(fatent, image_buf, bpb);
 		set_fat_entry (freetemp, CLUST_FREE, image_buf, bpb);
 	}
@@ -245,6 +243,9 @@ void fix_lcluster(uint16_t startCluster, uint8_t *image_buf, struct bpb33 *bpb, 
 	
 	//set the "real" last cluster to EOF
 	set_fat_entry (prevfat, (FAT12_MASK & CLUST_EOFS), image_buf, bpb);
+	
+	//update the refcounter array of corresponding indexes to be ones if they were references clusters
+	 
 }
 
 //Fix for when the FAT chain cluster is 'S'HORTER than the given correct size in dir entry
@@ -255,20 +256,23 @@ void fix_scluster(struct direntry *dirent, int clusterlen){
 
 
 // check if a file's size has changed and is inconsistent with the FAT, calls the right function to fix the problem
-void check_cluster_size(struct direntry *dirent, uint8_t *image_buf, struct bpb33 *bpb) {
+void check_cluster_size(struct direntry *dirent, uint8_t *image_buf, struct bpb33 *bpb, int *refarr) {
 	uint32_t size = getulong(dirent->deFileSize);
 	uint16_t startCluster = getushort(dirent->deStartCluster);
 	
+	refarr[startCluster]++;
+	
 	// check if actual = expected size
-	int clusterlen = getclusterlen(startCluster, image_buf, bpb);
+	int clusterlen = getclusterlen(startCluster, image_buf, bpb, refarr);
 	uint32_t expectedClusterLen = (size % 512) ? (size / 512 + 1) : (size / 512);
+	
 	
 	
 	if (clusterlen != expectedClusterLen) {
 		printf("FAT INCONSISTENT: expected a chain length of %u clusters, actual chain length is %d clusters.\n", expectedClusterLen, clusterlen);
 		if (clusterlen > expectedClusterLen) {
 			// fixes the FAT chain if the expected chain is longer than the actual chain
-			fix_lcluster(startCluster, image_buf, bpb, expectedClusterLen);
+			fix_lcluster(startCluster, image_buf, bpb, expectedClusterLen, refarr);
 		}
 		else {
 			// fixes the dirent if the actual chain is less than the expected chain
@@ -280,7 +284,8 @@ void check_cluster_size(struct direntry *dirent, uint8_t *image_buf, struct bpb3
 }
 
 // from dos_ls.c file 
-void follow_dir(uint16_t cluster, int indent, uint8_t *image_buf, struct bpb33* bpb){
+//traverses through a directory entry 
+void follow_dir(uint16_t cluster, int indent, uint8_t *image_buf, struct bpb33* bpb, int *refarr){
     
     while (is_valid_cluster(cluster, bpb)) {
         struct direntry *dirent = (struct direntry*)cluster_to_addr(cluster, image_buf, bpb);
@@ -289,12 +294,14 @@ void follow_dir(uint16_t cluster, int indent, uint8_t *image_buf, struct bpb33* 
         int i = 0;
 		for ( ; i < numDirEntries; i++) {
 			uint16_t followclust = print_dirent(dirent, indent);	
-			// check the size and fix problems for each file
+			
+			// check the size and fix problems for each file; don't fix anything if it isn't a file 
 			if (followclust != 0) {
-				check_cluster_size(dirent, image_buf, bpb);
+				check_cluster_size(dirent, image_buf, bpb, refarr);
 			}
+			
         	if (followclust){
-        		follow_dir(followclust, indent+1, image_buf, bpb);
+        		follow_dir(followclust, indent+1, image_buf, bpb, refarr);
         	}
         	dirent++;
 		}
@@ -303,8 +310,9 @@ void follow_dir(uint16_t cluster, int indent, uint8_t *image_buf, struct bpb33* 
 }
 
 
-// from dos_ls.c file
-void traverse_root(uint8_t *image_buf, struct bpb33* bpb){
+// modified from dos_ls.c file
+//traversing through all the directory entries (starting at the root directory entry)
+void traverse_root(uint8_t *image_buf, struct bpb33* bpb, int *refarr){
 	uint16_t cluster = 0;
 	
 	struct direntry *dirent = (struct direntry *)cluster_to_addr(cluster, image_buf, bpb);
@@ -314,14 +322,16 @@ void traverse_root(uint8_t *image_buf, struct bpb33* bpb){
 		
 		
 		uint16_t followclust = print_dirent(dirent, 0);
+		
 		if (followclust != 0) {
 		// check the size of the file
-			check_cluster_size(dirent, image_buf, bpb);
+			check_cluster_size(dirent, image_buf, bpb, refarr);
 		}
 		
 		if (is_valid_cluster(followclust, bpb)) {
-			follow_dir(followclust, 1, image_buf, bpb);
+			follow_dir(followclust, 1, image_buf, bpb, refarr);
 		}
+		
 		dirent++;
 	}
 }
@@ -329,25 +339,22 @@ void traverse_root(uint8_t *image_buf, struct bpb33* bpb){
 
 int main(int argc, char** argv) {
     uint8_t *image_buf;
-    int fd;
     struct bpb33* bpb;
+    int fd;
+   
     if (argc < 2) {
 	usage(argv[0]);
     }
 
     image_buf = mmap_file(argv[1], &fd); //image_buf is a pointer to the memory-mapped disk image;can pass pointer along other funcs to read and manipulate FS
     bpb = check_bootsector(image_buf); // checks to makes sure bootsector is valid
-    
-    // your code should start here...
-	// scan the FAT system and gather data about references
-	traverse_root(image_buf, bpb);
-
+    int arrsize = (bpb->bpbSectors) - 31;
+    int *refarr = malloc(sizeof(int) *arrsize) ; //an array that keeps track of the reference counts
+	 memset(refarr, 0, arrsize); //set all the values in the reference counter array to zero
+	 // scan the FAT system and gather data about references
+	 traverse_root(image_buf, bpb, refarr);
 	 
-	//recursively traverse the dir entry
-	 
-	 //compare the metadata and the actual length/size of the chain cluster and use functions to fix the inconsistencies accordingly
-	 
-	 //remember to update the reference counter array
+	 //update the reference counter array to ones if they are referenced clusters
 
 
 
