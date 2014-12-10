@@ -32,9 +32,11 @@ void usage(char *progname) {
     exit(1);
 }
 
+
+// from dos_cp.c file
+// writes the values into a directory entry
 void write_dirent(struct direntry *dirent, char *filename, uint16_t start_cluster, uint32_t size) {
-	// from dos_cp.c file
-	// writes the values into a directory entry
+
 	char *p, *p2;
 	char *uppername;
 	int len, i;
@@ -82,65 +84,32 @@ void write_dirent(struct direntry *dirent, char *filename, uint16_t start_cluste
 	putulong(dirent->deFileSize, size);
 }
 
+// from dos_co.file
+// finds a free slot in the directory, adn write the directory entry
+void create_dirent(struct direntry *dirent, char *filename, uint16_t start_cluster, uint32_t size, uint8_t *image_buf, struct bpb33 *bpb) {
 
-
-
-//get the size of the file that is recorded in the dir entry and convert into the number of clusters there should be in the chain
-//used in main function
-uint32_t getmetanumcluster(struct direntry *dirent){
-	uint32_t size = getulong(dirent->deFileSize);
-	int numcluster = size / 512
-	if ((size % 512) !=0){
-		numcluster+=1;
+	while (1) {
+		if (dirent->deName[0] == SLOT_EMPTY) {
+			// we found an empty slot at the end of the directory
+			write_dirent(dirent,filename, start_cluster, size);
+			dirent++;
+			// make sure the next dirent is set to be empty, just in case it wasn't before
+			memset((uint8_t *)dirent, 0, sizeof(struct direntry));
+			dirent->deName[0] == SLOT_EMPTY;
+			return;
+		}
+		if (dirent->deName[0] == SLOT_DELETED) {
+			// we found a deleted entry - we can just overwrite it
+			write_dirent(dirent, filename, start_cluster, size);
+			return;
+		}
+		dirent++;
 	}
-	return numcluster;
-}
-
-//gets the current actual length of the cluster chain so that it can be compared to the size value in the directory entry
-int getclusterlen(uint16_t startCluster, uint8_t *image_buf, struct bpb33 *bpb){
-	int clusterlen = 1;
-	uint16_t fatent = get_fat_entry(startCluster, image_buf, bpb);
-
-	while (!is_end_of_file(fatent)){
-		clusterlen++;
-		fatent = get_fat_entry(startCluster, image_buf, bpb);
-	}
-	return clusterlen;
-}
-
-//Fix for when the FAT cluster chain is 'L'ONGER than the given correct size in the dir entry 
-void fix_lcluster(uint16_t startCluster, uint8_t *image_buf, struct bpb33 *bpb, uint32_t clusterlen){
-	//can we always assume there will be at least one cluster? for now, I assumed that we also assume there is always one
-	int clusternum = 1;
-	uint16_t fatent = get_fat_entry(startCluster, image_buf, bpb);
-	
-	while (clusternum < clusterlen){
-		fatent = get_fat_entry(startCluster, image_buf, bpb);
-		clusternum++;
-	}
-		
-	//set the "real" last cluster to EOF
-	set_fat_entry (fatent, EOF, image_buf, bpb);
-	
-	//freeing any clusters that exist past the real last cluster
-	while (!is_end_of_file(fatent)){
-		uint16_t freetemp = fatent;
-		fatent = get_fat_entry(startCluster, image_buf, bpb);
-		set_fat_entry (freetemp, 0, image_buf, bpb); // not sure if I'm freeing correctly (CLUST_FREE value is 0)
-	}	
-}
-
-//Fix for when the FAT chain cluster is 'S'HORTER than the given correct size in dir entry
-void fix_scluster(uint16_t startCluster, uint8_t *image_buf, struct bpb33 *bpb, struct direntry *dirent){
-	//get the real length of the cluster chain from the FAT 
-	int clusterlen = getclusterlen (startCluster, image_buf, bpb);
-	//write the actual "correct" size into the dir entry
-	putulong(dirent->deFileSize, (clusterlen * 512)); //check syntax
 }
 
 
+// modified from dos_ls.c file
 uint16_t print_dirent(struct direntry *dirent, int indent) {
-	// modified from dos_ls.c file
 	uint16_t followclust = 0;
 	
 	int i;
@@ -221,8 +190,117 @@ uint16_t print_dirent(struct direntry *dirent, int indent) {
 }
 
 
+
+//get the size of the file that is recorded in the dir entry and convert into the number of clusters there should be in the chain
+//used in main function
+uint32_t getmetanumcluster(struct direntry *dirent){
+	uint32_t size = getulong(dirent->deFileSize);
+	int numcluster = size / 512
+	if ((size % 512) !=0){
+		numcluster+=1;
+	}
+	return numcluster;
+}
+
+//gets the current actual length of the cluster chain so that it can be compared to the size value in the directory entry
+int getclusterlen(uint16_t startCluster, uint8_t *image_buf, struct bpb33 *bpb){
+	int clusterlen = 1;
+	uint16_t fatent = get_fat_entry(startCluster, image_buf, bpb);
+
+	while (!is_end_of_file(fatent)){
+		fatent = get_fat_entry(startCluster, image_buf, bpb);
+		clusterlen++;
+	}
+	return clusterlen;
+}
+
+
+
+
+// fix for when the FAT cluster chain is 'L'ONGER than the given correct size in the dir entry 
+void fix_lcluster(uint16_t startCluster, uint8_t *image_buf, struct bpb33 *bpb, uint32_t clusterlen){
+	int clusternum = 1;
+	uint16_t prevfat = startCluster;
+	uint16_t fatent = get_fat_entry(startCluster, image_buf, bpb);
+	
+	// travel according to the links in the FAT
+	while (clusternum < clusterlen){
+		prevfat = fatent;
+		fatent = get_fat_entry(fatent, image_buf, bpb);
+		clusternum++;
+	}
+		
+	//freeing any clusters that exist past the real last cluster
+	fatent =  get_fat_entry(fatent, image_buf, bpb);
+	while (!is_end_of_file(fatent)){
+		uint16_t freetemp = fatent;
+		fatent = get_fat_entry(fatent, image_buf, bpb);
+		set_fat_entry (freetemp, CLUST_FREE, image_buf, bpb);
+	}
+	
+	// free the old EOF
+	set_fat_entry(fatent, CLUST_FREE, image_buf, bpb);
+	
+	//set the "real" last cluster to EOF
+	set_fat_entry (prevfat, (FAT12_MASK & CLUST_EOFS), image_buf, bpb);
+}
+
+//Fix for when the FAT chain cluster is 'S'HORTER than the given correct size in dir entry
+void fix_scluster(struct direntry *dirent, int clusterlen){
+	//write the actual "correct" size into the dir entry
+	putulong(dirent->deFileSize,(uint32_t) (clusterlen * 512));
+}
+
+
+// check if a file's size has changed and is inconsistent with the FAT, calls the right function to fix the problem
+void check_cluster_size(struct direntry *dirent, uint8_t *image_buf, struct bpb33 *bpb) {
+	uint32_t size = getulong(dirent->deFileSize);
+	uint16_t startCluster = getushort(dirent->deStartCluster);
+	
+	// check if actual = expected size
+	int clusterlen = getclusterlen(startCluster, image_buf, bpb);
+	uint32_t expectedClusterLen = (size % 512) ? (size / 512 + 1) : (size / 512);
+	
+	
+	if (clusterlen != expectedChainLen) {
+		printf("FAT INCONSISTENT: expected a chain length of %u clusters, actual chain length is %u clusters.\n");
+		if (clusterlen > expectedChainLeng) {
+			// fixes the FAT chain if the expected chain is longer than the actual chain
+			fix_lcluster(startCluster, image_buf, bpb, expectedClusterLen);
+		}
+		else {
+			// fixes the dirent if the actual chain is less than the expected chain
+			fix_scluster(dirent, clusterlen);
+	
+		}
+		printf("Fixed the problem!\n");
+	}
+}
+
+// from dos_ls.c file 
+void follow_dir(uint16_t cluster, int indent, uint8_t *image_buf, struct bpb33* bpb){
+    
+    while (is_valid_cluster(cluster, bpb)) {
+        struct direntry *dirent = (struct direntry*)cluster_to_addr(cluster, image_buf, bpb);
+
+        int numDirEntries = (bpb->bpbBytesPerSec * bpb->bpbSecPerClust) / sizeof(struct direntry);
+        int i = 0;
+		for ( ; i < numDirEntries; i++) {
+			uint16_t followclust = print_dirent(dirent, indent);	
+			// check the size and fix problems for each file
+			check_cluster_size(dirent, image_buf, bpb);
+			
+        	if (followclust)
+        		follow_dir(followclust, indent+1, image_buf, bpb);
+        	dirent++;
+		}
+		cluster = get_fat_entry(cluster, image_buf, bpb);
+    }
+}
+
+
+// from dos_ls.c file
 void traverse_root(uint8)t *image_buf, struct bpb33* bpb){
-	// from dos_ls.c file
 	uint16_t cluster = 0;
 	
 	struct direntry *dirent = (struct direntry *)cluster_to_addr(cluster, image_buf, bpb);
@@ -230,6 +308,10 @@ void traverse_root(uint8)t *image_buf, struct bpb33* bpb){
 	int i = 0;
 	for ( ; i < bpb->bpbRootDirEnts; i++) {
 		uint16_t followclust = print_dirent(dirent, 0);
+		
+		// check the size of the file
+		check_cluster_size(dirent, image_buf, bpb);
+		
 		if (is_valid_cluster(followclust, bpb)) {
 			follow_dir(followclust, 1, image_buf, bpb, references);
 		}
@@ -252,7 +334,7 @@ int main(int argc, char** argv) {
     // your code should start here...
 	// scan the FAT system and gather data about references
 	traverse_root(image_buf, bpb);
-	 uint8_t rootaddr = root_dir_addr(image_buf, bpb); 
+
 	 
 	 //recursively traverse the dir entry
 	 
