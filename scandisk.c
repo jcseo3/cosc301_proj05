@@ -257,7 +257,7 @@ void fix_scluster(struct direntry *dirent, int clusterlen){
 
 // check if a file's size has changed and is inconsistent with the FAT, calls the right function to fix the problem
 void check_cluster_size(struct direntry *dirent, uint8_t *image_buf, struct bpb33 *bpb, int *refarr) {
-	uint32_t size = getulong(dirent->deFileSize);
+	uint32_t size = getulong(dirent->deFileSize); 
 	uint16_t startCluster = getushort(dirent->deStartCluster);
 	
 	refarr[startCluster]++;
