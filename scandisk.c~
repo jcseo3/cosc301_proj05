@@ -442,6 +442,9 @@ int main(int argc, char** argv) {
 	 // scan the FAT system and gather data about references
 	 traverse_root(image_buf, bpb, refarr);
 	 unorphaner(refarr, arrsize, image_buf, bpb);
+	 // free stuff
+	 free(refarr);
+	 free(bpb);
     unmmap_file(image_buf, &fd);
     return 0;
 }
