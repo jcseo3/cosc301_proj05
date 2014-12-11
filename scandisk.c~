@@ -85,7 +85,7 @@ void write_dirent(struct direntry *dirent, char *filename, uint16_t start_cluste
 	putulong(dirent->deFileSize, size);
 }
 
-// from dos_co.file
+// from dos_cp.file
 // finds a free slot in the directory, and writes the directory entry
 void create_dirent(struct direntry *dirent, char *filename, uint16_t start_cluster, uint32_t size, uint8_t *image_buf, struct bpb33 *bpb) {
 
@@ -265,7 +265,7 @@ void fix_lcluster(uint16_t startCluster, uint8_t *image_buf, struct bpb33 *bpb, 
 		uint16_t freetemp = fatent;
 		refarr[fatent]--;
 		fatent = get_fat_entry(fatent, image_buf, bpb);
-		set_fat_entry (freetemp, CLUST_FREE, image_buf, bpb);
+		set_fat_entry(freetemp, CLUST_FREE, image_buf, bpb);
 	}
 	
 	// free the old EOF
@@ -313,9 +313,6 @@ void check_cluster_size(struct direntry *dirent, uint8_t *image_buf, struct bpb3
 	
 		}
 		printf("Fixed the problem!\n");
-	}
-	else {
-		printf("no problems here\n");
 	}
 }
 
@@ -369,7 +366,6 @@ void traverse_root(uint8_t *image_buf, struct bpb33* bpb, int *refarr){
 		if (is_valid_cluster(followclust, bpb)) {
 			follow_dir(followclust, 1, image_buf, bpb, refarr);
 		}
-		
 		dirent++;
 	}
 }
@@ -384,15 +380,27 @@ int main(int argc, char** argv) {
 	usage(argv[0]);
     }
 
-    image_buf = mmap_file(argv[1], &fd); //image_buf is a pointer to the memory-mapped disk image;can pass pointer along other funcs to read and manipulate FS
-    bpb = check_bootsector(image_buf); // checks to makes sure bootsector is valid
+    image_buf = mmap_file(argv[1], &fd); 
+    bpb = check_bootsector(image_buf); 
+    
+    
     int arrsize = (bpb->bpbSectors) - 31;
     int *refarr = malloc(sizeof(int) *arrsize) ; //an array that keeps track of the reference counts
 	 memset(refarr, 0, arrsize); //set all the values in the reference counter array to zero
 	 // scan the FAT system and gather data about references
 	 traverse_root(image_buf, bpb, refarr);
-	 
-	 //update the reference counter array to ones if they are referenced clusters
+	 // fix any orphan clusters left over
+	 for (int i = 2; i < arrsize; i++) { // start from cluster 2
+	 	printf("%d ", refarr[i]);
+	 	if (refarr[i] == 0) {
+	 		// check if entries marked free are actually free
+	 		if (get_fat_entry(i, image_buf, bpb) != CLUST_FREE) {
+	 			struct direntry *dirent = (struct direntry *)cluster_to_addr(cluster, image_buf, bpb);
+	 			// make a new directory entry if the cluster is an orphan
+	 			write(dirent , "found1.dat", i, getclusterlen(i, image_buf, bpb));
+	 		}
+	 	}
+	 }
 
 
 
