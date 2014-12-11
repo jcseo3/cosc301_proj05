@@ -341,6 +341,30 @@ void check_cluster_size(struct direntry *dirent, uint8_t *image_buf, struct bpb3
 	}
 }
 
+//fix the orphan clusters 
+void unorphaner(int *refarr, int arrsize, uint8_t *image_buf, struct bpb33 *bpb) {
+	int n = 1; 
+	struct direntry *dirent = (struct direntry *)cluster_to_addr(0, image_buf, bpb);
+	// checks for orphan cluster and fixes them
+	for (int i = 2; i < arrsize; i++) { // start from cluster 2
+		//printf("%d ", refarr[i]);
+	 	if (refarr[i] == 0) {
+	 		// check if entries marked free are actually free
+	 		uint16_t fatent = get_fat_entry(i, image_buf, bpb);
+	 		if (is_valid_cluster(fatent, bpb) || is_end_of_file(fatent)) {		
+	 			// make the file name
+	 			char filename[32];
+	 			snprintf(filename, 32, "found%d.dat", n);
+	 			n++;
+	 			//printf("length is: %d\n" , getclusterlen(i, image_buf, bpb, refarr));
+	 			// make a new directory entry if the cluster is an orphan
+	 			create_dirent(dirent, filename, i, (uint32_t)(512* getclusterlen(i, image_buf, bpb, refarr)), image_buf, bpb);
+	 			printf("fixed the orphan!\n");
+	 		}
+	 	}
+	 }
+}
+
 // from dos_ls.c file 
 //traverses through a directory entry 
 void follow_dir(uint16_t cluster, int indent, uint8_t *image_buf, struct bpb33* bpb, int *refarr){
@@ -393,31 +417,6 @@ void traverse_root(uint8_t *image_buf, struct bpb33* bpb, int *refarr){
 		}
 		dirent++;
 	}
-}
-
-
-//fix the orphan clusters 
-void unorphaner(int *refarr, int arrsize, uint8_t *image_buf, struct bpb33 *bpb) {
-	int n = 1; 
-	struct direntry *dirent = (struct direntry *)cluster_to_addr(0, image_buf, bpb);
-	// checks for orphan cluster and fixes them
-	for (int i = 2; i < arrsize; i++) { // start from cluster 2
-		//printf("%d ", refarr[i]);
-	 	if (refarr[i] == 0) {
-	 		// check if entries marked free are actually free
-	 		uint16_t fatent = get_fat_entry(i, image_buf, bpb);
-	 		if (is_valid_cluster(fatent, bpb) || is_end_of_file(fatent)) {		
-	 			// make the file name
-	 			char filename[32];
-	 			snprintf(filename, 32, "found%d.dat", n);
-	 			n++;
-	 			//printf("length is: %d\n" , getclusterlen(i, image_buf, bpb, refarr));
-	 			// make a new directory entry if the cluster is an orphan
-	 			create_dirent(dirent, filename, i, (uint32_t)(512* getclusterlen(i, image_buf, bpb, refarr)), image_buf, bpb);
-	 			printf("fixed the orphan!\n");
-	 		}
-	 	}
-	 }
 }
 
 
