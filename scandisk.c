@@ -371,6 +371,24 @@ void traverse_root(uint8_t *image_buf, struct bpb33* bpb, int *refarr){
 }
 
 
+
+void orphaned_fixer(int *refarr) {
+	int i = 1; 
+	// checks for orphan cluster and fixes them
+	for (int i = 2; i < arrsize; i++) { // start from cluster 2
+		printf("%d ", refarr[i]);
+	 	if (refarr[i] == 0) {
+	 		// check if entries marked free are actually free
+	 		if (is_valid_cluster(get_fat_entry(i, image_buf, bpb))) {
+	 			char * filename = 
+	 			// make a new directory entry if the cluster is an orphan
+	 			create_dirent(dirent, "found1.dat", i, getclusterlen(i, image_buf, bpb), image_bug, bpb);
+	 		}
+	 	}
+	 }
+
+}
+
 int main(int argc, char** argv) {
     uint8_t *image_buf;
     struct bpb33* bpb;
@@ -389,17 +407,7 @@ int main(int argc, char** argv) {
 	 memset(refarr, 0, arrsize); //set all the values in the reference counter array to zero
 	 // scan the FAT system and gather data about references
 	 traverse_root(image_buf, bpb, refarr);
-	 // fix any orphan clusters left over
-	 for (int i = 2; i < arrsize; i++) { // start from cluster 2
-	 	printf("%d ", refarr[i]);
-	 	if (refarr[i] == 0) {
-	 		// check if entries marked free are actually free
-	 		if (get_fat_entry(i, image_buf, bpb) != CLUST_FREE) {
-	 			// make a new directory entry if the cluster is an orphan
-	 			create_dirent(dirent, "found1.dat", i, getclusterlen(i, image_buf, bpb), image_bug, bpb);
-	 		}
-	 	}
-	 }
+
 
 
 

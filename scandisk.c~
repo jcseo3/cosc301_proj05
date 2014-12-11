@@ -395,9 +395,8 @@ int main(int argc, char** argv) {
 	 	if (refarr[i] == 0) {
 	 		// check if entries marked free are actually free
 	 		if (get_fat_entry(i, image_buf, bpb) != CLUST_FREE) {
-	 			struct direntry *dirent = (struct direntry *)cluster_to_addr(cluster, image_buf, bpb);
 	 			// make a new directory entry if the cluster is an orphan
-	 			write(dirent , "found1.dat", i, getclusterlen(i, image_buf, bpb));
+	 			create_dirent(dirent, "found1.dat", i, getclusterlen(i, image_buf, bpb), image_bug, bpb);
 	 		}
 	 	}
 	 }
