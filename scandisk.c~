@@ -32,7 +32,15 @@ void usage(char *progname) {
     fprintf(stderr, "usage: %s <imagename>\n", progname);
     exit(1);
 }
-
+/*
+//checks array to see if the value in an element is already 1 and deletes the current dir entry if so; else, it will increment the element 0 in the array to 1
+void check_update_arr(int *refarr, uint16_t fatent){
+	if (refarr[fatent] == 0){
+		refarr[fatent]++;		
+	}else{
+	//delete the entire dir entry? 
+	}
+}*/
 
 // from dos_cp.c file
 // writes the values into a directory entry
@@ -235,11 +243,26 @@ int is_file(struct direntry *dirent, int indent) {
 //gets the current actual length of the cluster chain so that it can be compared to the size value in the directory entry
 int getclusterlen(uint16_t startCluster, uint8_t *image_buf, struct bpb33 *bpb, int *refarr){
 	int clusterlen = 1;
+	uint16_t prevfat = startCluster;
 	uint16_t fatent = get_fat_entry(startCluster, image_buf, bpb);
+	//if the starting cluster in a chain is a bad cluster, delete the dir entry
+	if (startCluster == (FAT12_MASK & CLUST_BAD)){
+		printf("found BAD1\n");
+		//**********delete the dir entry
+		return 0;
+	}	
+	//is the while loop not going to go through with a single bad cluster chain? 
 	while (!is_end_of_file(fatent)){
-		refarr[fatent]++;
-		fatent = get_fat_entry(fatent, image_buf, bpb);
-		clusterlen++;
+	//if cluster is a bad cluster in the middle of a cluster chain, then set the previous cluster to EOF and make the rest of the clusters in the chain orphans
+		if (fatent == (FAT12_MASK & CLUST_BAD)){
+			printf("found BAD2\n");
+			return clusterlen;
+		}else{
+			prevfat = fatent;
+			refarr[fatent]++;
+			fatent = get_fat_entry(fatent, image_buf, bpb);
+			clusterlen++;
+		}
 	}
 	return clusterlen;
 }
@@ -265,7 +288,9 @@ void fix_lcluster(uint16_t startCluster, uint8_t *image_buf, struct bpb33 *bpb, 
 		uint16_t freetemp = fatent;
 		refarr[fatent]--;
 		fatent = get_fat_entry(fatent, image_buf, bpb);
-		set_fat_entry(freetemp, CLUST_FREE, image_buf, bpb);
+		if(fatent != (FAT12_MASK & CLUST_BAD)){
+			set_fat_entry(freetemp, CLUST_FREE, image_buf, bpb);
+		}
 	}
 	
 	// free the old EOF
@@ -356,7 +381,7 @@ void traverse_root(uint8_t *image_buf, struct bpb33* bpb, int *refarr){
 		
 		
 		uint16_t followclust = print_dirent(dirent, 0);
-		
+		refarr[followclust]++;
 		
 		if (is_file(dirent, 0) == 1) {
 		// check the size of the file
@@ -371,26 +396,24 @@ void traverse_root(uint8_t *image_buf, struct bpb33* bpb, int *refarr){
 }
 
 
-
+//fix the orphan clusters 
 void unorphaner(int *refarr, int arrsize, uint8_t *image_buf, struct bpb33 *bpb) {
 	int n = 1; 
 	struct direntry *dirent = (struct direntry *)cluster_to_addr(0, image_buf, bpb);
 	// checks for orphan cluster and fixes them
 	for (int i = 2; i < arrsize; i++) { // start from cluster 2
-		printf("%d ", refarr[i]);
+		//printf("%d ", refarr[i]);
 	 	if (refarr[i] == 0) {
 	 		// check if entries marked free are actually free
-	 		uint8_t fatent = get_fat_entry(i, image_buf, bpb);
-	 		if (is_valid_cluster(fatent, bpb) || is_end_of_file(fatent)) {
-	 			
+	 		uint16_t fatent = get_fat_entry(i, image_buf, bpb);
+	 		if (is_valid_cluster(fatent, bpb) || is_end_of_file(fatent)) {		
 	 			// make the file name
-	 			char buf[4];
-	 			snprintf(buf, size, "found%d.dat", i);
-	 			char *filename = strcat(strcat("found", buf), ".dat");
+	 			char filename[32]; // buffer size big enough?? 
+	 			snprintf(filename, 32, "found%d.dat", n);
 	 			n++;
-	 			
 	 			// make a new directory entry if the cluster is an orphan
 	 			create_dirent(dirent, filename, i, getclusterlen(i, image_buf, bpb, refarr), image_buf, bpb);
+	 			printf("fixed the orphan!\n");
 	 		}
 	 	}
 	 }
@@ -418,7 +441,7 @@ int main(int argc, char** argv) {
 	 traverse_root(image_buf, bpb, refarr);
 
 
-	unorphaner(refarr, arrsize, image_buf, bpb);
+	 unorphaner(refarr, arrsize, image_buf, bpb);
 
     unmmap_file(image_buf, &fd);
     return 0;
