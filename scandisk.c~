@@ -32,13 +32,14 @@ void usage(char *progname) {
     fprintf(stderr, "usage: %s <imagename>\n", progname);
     exit(1);
 }
+
 /*
-//checks array to see if the value in an element is already 1 and deletes the current dir entry if so; else, it will increment the element 0 in the array to 1
-void check_update_arr(int *refarr, uint16_t fatent){
+//checks array to see if the value in an element is already 1 and returns the current length of the cluster chain; else, it will increment the element 0 in the array to 1
+void check_update_arr(int *refarr, uint16_t fatent, int clusterlen){
 	if (refarr[fatent] == 0){
 		refarr[fatent]++;		
 	}else{
-	//delete the entire dir entry? 
+		return clusterlen; 
 	}
 }
 */
@@ -252,15 +253,21 @@ int getclusterlen(uint16_t startCluster, uint8_t *image_buf, struct bpb33 *bpb, 
 		//**********delete the dir entry
 		return 0;
 	}	
-	//is the while loop not going to go through with a single bad cluster chain? 
 	while (!is_end_of_file(fatent)){
 	//if cluster is a bad cluster in the middle of a cluster chain, then set the previous cluster to EOF and make the rest of the clusters in the chain orphans
 		if (fatent == (FAT12_MASK & CLUST_BAD)){
-			printf("found BAD2\n");
+			//printf("found BAD2\n");
 			return clusterlen;
 		}else{
 			prevfat = fatent;
-			refarr[fatent]++;
+			//refarr[fatent]++;
+			//checks to see if the array is already 1
+			if (refarr[fatent] == 0){
+				refarr[fatent]++;		
+			}else{
+				return clusterlen; 
+			}
+		}
 			fatent = get_fat_entry(fatent, image_buf, bpb);
 			//this fixes part of disk 5 which is the infinite FAT entry loop pointing to itself forever
 			if (prevfat == fatent){
@@ -270,7 +277,6 @@ int getclusterlen(uint16_t startCluster, uint8_t *image_buf, struct bpb33 *bpb, 
 			//printf("fatent: %u\n", fatent);
 			clusterlen++;
 		}
-	}
 	return clusterlen;
 }
 
@@ -366,7 +372,7 @@ void unorphaner(int *refarr, int arrsize, uint8_t *image_buf, struct bpb33 *bpb)
 	 			//printf("length is: %d\n" , getclusterlen(i, image_buf, bpb, refarr));
 	 			// make a new directory entry if the cluster is an orphan
 	 			create_dirent(dirent, filename, i, (uint32_t)(512* getclusterlen(i, image_buf, bpb, refarr)), image_buf, bpb);
-	 			printf("fixed the orphan!\n");
+	 			printf("Fixed orphan cluster! Orphan's new home is at: %s\n", filename);
 	 		}
 	 	}
 	 }
@@ -382,10 +388,9 @@ void follow_dir(uint16_t cluster, int indent, uint8_t *image_buf, struct bpb33* 
         int numDirEntries = (bpb->bpbBytesPerSec * bpb->bpbSecPerClust) / sizeof(struct direntry);
         int i = 0;
 		for ( ; i < numDirEntries; i++) {
-			uint16_t followclust = print_dirent(dirent, indent);	
+			uint16_t followclust = print_dirent(dirent, indent);			
 			
-			
-			// check the size and fix problems for each file; don't fix anything if it isn't a file 		
+			//check the size and fix problems for each file; don't fix anything if it isn't a file 		
 			if (is_file(dirent, 0) == 1) {
 				check_cluster_size(dirent, image_buf, bpb, refarr);
 			}
@@ -415,7 +420,7 @@ void traverse_root(uint8_t *image_buf, struct bpb33* bpb, int *refarr){
 		refarr[followclust]++;
 		
 		if (is_file(dirent, 0) == 1) {
-		// check the size of the file
+			// check the size of the file
 			check_cluster_size(dirent, image_buf, bpb, refarr);
 		}
 		
@@ -440,11 +445,12 @@ int main(int argc, char** argv) {
     bpb = check_bootsector(image_buf); 
     
     int arrsize = (bpb->bpbSectors) - 31;
-    int *refarr = malloc(sizeof(int) *arrsize) ; //an array that keeps track of the reference counts
-	 memset(refarr, 0, arrsize); //set all the values in the reference counter array to zero
+    //an array that keeps track of the reference counts
+    int *refarr = malloc(sizeof(int) *arrsize);
+    //set all the values in the reference counter array to zero 
+	 memset(refarr, 0, arrsize); 
 	 // scan the FAT system and gather data about references
 	 traverse_root(image_buf, bpb, refarr);
-	 //printf("are we getting here?\n");
 	 unorphaner(refarr, arrsize, image_buf, bpb);
     unmmap_file(image_buf, &fd);
     return 0;
