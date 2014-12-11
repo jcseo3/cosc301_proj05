@@ -372,22 +372,31 @@ void traverse_root(uint8_t *image_buf, struct bpb33* bpb, int *refarr){
 
 
 
-void orphaned_fixer(int *refarr) {
-	int i = 1; 
+void unorphaner(int *refarr, int arrsize, uint8_t *image_buf, struct bpb33 *bpb) {
+	int n = 1; 
+	struct direntry *dirent = (struct direntry *)cluster_to_addr(0, image_buf, bpb);
 	// checks for orphan cluster and fixes them
 	for (int i = 2; i < arrsize; i++) { // start from cluster 2
 		printf("%d ", refarr[i]);
 	 	if (refarr[i] == 0) {
 	 		// check if entries marked free are actually free
-	 		if (is_valid_cluster(get_fat_entry(i, image_buf, bpb))) {
-	 			char * filename = 
+	 		uint8_t fatent = get_fat_entry(i, image_buf, bpb);
+	 		if (is_valid_cluster(fatent, bpb) || is_end_of_file(fatent)) {
+	 			
+	 			// make the file name
+	 			char buf[4];
+	 			snprintf(buf, 4, "found%d.dat", i);
+	 			char *filename = strcat(strcat("found", buf), ".dat");
+	 			n++;
+	 			
 	 			// make a new directory entry if the cluster is an orphan
-	 			create_dirent(dirent, "found1.dat", i, getclusterlen(i, image_buf, bpb), image_bug, bpb);
+	 			create_dirent(dirent, filename, i, getclusterlen(i, image_buf, bpb, refarr), image_buf, bpb);
 	 		}
 	 	}
 	 }
 
 }
+
 
 int main(int argc, char** argv) {
     uint8_t *image_buf;
@@ -409,7 +418,7 @@ int main(int argc, char** argv) {
 	 traverse_root(image_buf, bpb, refarr);
 
 
-
+	unorphaner(refarr, arrsize, image_buf, bpb);
 
     unmmap_file(image_buf, &fd);
     return 0;
