@@ -283,7 +283,7 @@ void fix_lcluster(uint16_t startCluster, uint8_t *image_buf, struct bpb33 *bpb, 
 	}
 		
 	//freeing any clusters that exist past the real last cluster
-	fatent =  get_fat_entry(fatent, image_buf, bpb);
+	//fatent =  get_fat_entry(fatent, image_buf, bpb);
 	while (!is_end_of_file(fatent)){
 		uint16_t freetemp = fatent;
 		refarr[fatent]--;
@@ -408,16 +408,16 @@ void unorphaner(int *refarr, int arrsize, uint8_t *image_buf, struct bpb33 *bpb)
 	 		uint16_t fatent = get_fat_entry(i, image_buf, bpb);
 	 		if (is_valid_cluster(fatent, bpb) || is_end_of_file(fatent)) {		
 	 			// make the file name
-	 			char filename[32]; // buffer size big enough?? 
+	 			char filename[32];
 	 			snprintf(filename, 32, "found%d.dat", n);
 	 			n++;
+	 			//printf("length is: %d\n" , getclusterlen(i, image_buf, bpb, refarr));
 	 			// make a new directory entry if the cluster is an orphan
-	 			create_dirent(dirent, filename, i, getclusterlen(i, image_buf, bpb, refarr), image_buf, bpb);
+	 			create_dirent(dirent, filename, i, (uint32_t)(512* getclusterlen(i, image_buf, bpb, refarr)), image_buf, bpb);
 	 			printf("fixed the orphan!\n");
 	 		}
 	 	}
 	 }
-
 }
 
 
@@ -433,16 +433,12 @@ int main(int argc, char** argv) {
     image_buf = mmap_file(argv[1], &fd); 
     bpb = check_bootsector(image_buf); 
     
-    
     int arrsize = (bpb->bpbSectors) - 31;
     int *refarr = malloc(sizeof(int) *arrsize) ; //an array that keeps track of the reference counts
 	 memset(refarr, 0, arrsize); //set all the values in the reference counter array to zero
 	 // scan the FAT system and gather data about references
 	 traverse_root(image_buf, bpb, refarr);
-
-
 	 unorphaner(refarr, arrsize, image_buf, bpb);
-
     unmmap_file(image_buf, &fd);
     return 0;
 }
