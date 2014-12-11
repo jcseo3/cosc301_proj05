@@ -40,7 +40,8 @@ void check_update_arr(int *refarr, uint16_t fatent){
 	}else{
 	//delete the entire dir entry? 
 	}
-}*/
+}
+*/
 
 // from dos_cp.c file
 // writes the values into a directory entry
@@ -261,6 +262,12 @@ int getclusterlen(uint16_t startCluster, uint8_t *image_buf, struct bpb33 *bpb, 
 			prevfat = fatent;
 			refarr[fatent]++;
 			fatent = get_fat_entry(fatent, image_buf, bpb);
+			//this fixes part of disk 5 which is the infinite FAT entry loop pointing to itself forever
+			if (prevfat == fatent){
+				set_fat_entry (fatent, (FAT12_MASK & CLUST_EOFS), image_buf, bpb);
+				return clusterlen+1;
+			}
+			//printf("fatent: %u\n", fatent);
 			clusterlen++;
 		}
 	}
@@ -437,6 +444,7 @@ int main(int argc, char** argv) {
 	 memset(refarr, 0, arrsize); //set all the values in the reference counter array to zero
 	 // scan the FAT system and gather data about references
 	 traverse_root(image_buf, bpb, refarr);
+	 //printf("are we getting here?\n");
 	 unorphaner(refarr, arrsize, image_buf, bpb);
     unmmap_file(image_buf, &fd);
     return 0;
