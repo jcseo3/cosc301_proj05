@@ -431,7 +431,7 @@ int main(int argc, char** argv) {
     int fd;
    
     if (argc < 2) {
-	usage(argv[0]);
+		usage(argv[0]);
     }
 
     image_buf = mmap_file(argv[1], &fd); 
