@@ -252,6 +252,7 @@ int getclusterlen(uint16_t startCluster, uint8_t *image_buf, struct bpb33 *bpb, 
 			if (refarr[fatent] == 0){
 				refarr[fatent]++;		
 			}else{
+				// fixes the in which 2 fat entries point to the same chain
 				if (clusterlen == 1)
 					return clusterlen;
 				return clusterlen - 1; 
