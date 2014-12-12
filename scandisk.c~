@@ -232,13 +232,15 @@ int is_file(struct direntry *dirent, int indent) {
 }
 
 //gets the current actual length of the cluster chain so that it can be compared to the size value in the directory entry
-int getclusterlen(uint16_t startCluster, uint8_t *image_buf, struct bpb33 *bpb, int *refarr){
+int getclusterlen(uint16_t startCluster, uint8_t *image_buf, struct bpb33 *bpb, int *refarr, struct direntry *dirent){
 	int clusterlen = 1;
 	uint16_t prevfat = startCluster;
 	uint16_t fatent = get_fat_entry(startCluster, image_buf, bpb);
 	//if the starting cluster in a chain is a bad cluster, delete the dir entry
 	if (startCluster == (FAT12_MASK & CLUST_BAD)){
-		printf("found BAD1\n");
+		int dirdeleted[1];
+		dirdeleted[0] = 0xe5;
+		memcpy(&(dirent->deName[0]), &dirdeleted, 1); //delete the directory entry
 		return 0;
 	}	
 	while (!is_end_of_file(fatent)){
@@ -321,7 +323,7 @@ void check_cluster_size(struct direntry *dirent, uint8_t *image_buf, struct bpb3
 	refarr[startCluster]++;
 	
 	// check if actual = expected size
-	int clusterlen = getclusterlen(startCluster, image_buf, bpb, refarr);
+	int clusterlen = getclusterlen(startCluster, image_buf, bpb, refarr, dirent);
 	uint32_t expectedClusterLen = (size % 512) ? (size / 512 + 1) : (size / 512);
 	
 	if (expectedClusterLen == 0) {
@@ -364,7 +366,7 @@ void unorphaner(int *refarr, int arrsize, uint8_t *image_buf, struct bpb33 *bpb)
 	 			n++;
 	 			//printf("length is: %d\n" , getclusterlen(i, image_buf, bpb, refarr));
 	 			// make a new directory entry if the cluster is an orphan
-	 			create_dirent(dirent, filename, i, (uint32_t)(512* getclusterlen(i, image_buf, bpb, refarr)), image_buf, bpb);
+	 			create_dirent(dirent, filename, i, (uint32_t)(512* getclusterlen(i, image_buf, bpb, refarr, dirent)), image_buf, bpb);
 	 			printf("Fixed orphan cluster! Orphan's new home is at: %s\n", filename);
 	 		}
 	 	}
