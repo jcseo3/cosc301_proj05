@@ -239,28 +239,30 @@ int getclusterlen(uint16_t startCluster, uint8_t *image_buf, struct bpb33 *bpb, 
 	//if the starting cluster in a chain is a bad cluster, delete the dir entry
 	if (startCluster == (FAT12_MASK & CLUST_BAD)){
 		printf("found BAD1\n");
-		//**********delete the dir entry
 		return 0;
 	}	
 	while (!is_end_of_file(fatent)){
 	//if cluster is a bad cluster in the middle of a cluster chain, then set the previous cluster to EOF and make the rest of the clusters in the chain orphan clusters
 		if (fatent == (FAT12_MASK & CLUST_BAD)){
 			return clusterlen;
-		}else{
+		}
+		else{
 			prevfat = fatent;
 			//checks to see if the array is already 1 before updating array
 			if (refarr[fatent] == 0){
 				refarr[fatent]++;		
 			}else{
-				return clusterlen; 
+				if (clusterlen == 1)
+					return clusterlen;
+				return clusterlen - 1; 
 			}
 		}
 			fatent = get_fat_entry(fatent, image_buf, bpb);
 			//this fixes part of disk 5 which is the infinite FAT entry loop pointing to itself forever
 			if (prevfat == fatent){
 				set_fat_entry (fatent, (FAT12_MASK & CLUST_EOFS), image_buf, bpb);
-				return clusterlen+1;
-			}
+				return clusterlen + 1;
+			} 
 			//printf("fatent: %u\n", fatent);
 			clusterlen++;
 		}
@@ -283,7 +285,6 @@ void fix_lcluster(uint16_t startCluster, uint8_t *image_buf, struct bpb33 *bpb, 
 	}
 		
 	//freeing any clusters that exist past the real last cluster
-	//fatent =  get_fat_entry(fatent, image_buf, bpb);
 	while (!is_end_of_file(fatent)){
 		uint16_t freetemp = fatent;
 		refarr[fatent]--;
@@ -327,19 +328,20 @@ void check_cluster_size(struct direntry *dirent, uint8_t *image_buf, struct bpb3
 	
 	
 	if (clusterlen != expectedClusterLen) {
-		print_indent(1);
-		printf("FAT INCONSISTENT: expected a chain length of %u clusters, actual chain length is %d clusters.\n", expectedClusterLen, clusterlen);
+		print_indent(2);
+		printf("FAT INCONSISTENT: expected %u clusters, actual %d clusters.\n", expectedClusterLen, clusterlen);
+		print_indent(2);
 		if (clusterlen > expectedClusterLen) {
 			// fixes the FAT chain if the expected chain is longer than the actual chain
 			fix_lcluster(startCluster, image_buf, bpb, expectedClusterLen, refarr);
+			printf("Fixed the cluster chain.\n");
 		}
 		else {
 			// fixes the dirent if the actual chain is less than the expected chain
 			fix_scluster(dirent, clusterlen);
+			printf("Fixed the directory entry.\n");
 	
 		}
-		print_indent(1);
-		printf("Fixed the problem!\n");
 	}
 }
 
@@ -361,7 +363,6 @@ void unorphaner(int *refarr, int arrsize, uint8_t *image_buf, struct bpb33 *bpb)
 	 			//printf("length is: %d\n" , getclusterlen(i, image_buf, bpb, refarr));
 	 			// make a new directory entry if the cluster is an orphan
 	 			create_dirent(dirent, filename, i, (uint32_t)(512* getclusterlen(i, image_buf, bpb, refarr)), image_buf, bpb);
-	 			print_indent(1);
 	 			printf("Fixed orphan cluster! Orphan's new home is at: %s\n", filename);
 	 		}
 	 	}
