@@ -21,6 +21,30 @@ Proj05
 #include "fat.h"
 #include "dos.h"
 
+
+/*
+Who did what:
+
+Junghyun wrote the function that fixed the FAT inconsistencies if the actual chain was longer or shorter than the expected lentgh (fix_lcluster and fix_scluster)
+
+Junghyun also wrote the function getclusterlen that gets the actual cluster legnth
+
+Cindy wrote the function check_cluster_size that combines Junghyun's functions and checks if a file need to be fixed.
+
+Cindy modified the traverse_root and follow_dir functions to call check_cluster_size
+
+Junghyun added the array of references to the code and modified the previous functions to update the array while travelling the clusters
+
+Cindy used the array to write the unorphaner function that checks for orphan clusters and makes a new dir entry for the clusters
+
+Junghyun wrote the code that detects if a cluster is marked as bad and how to deal with a bad cluster in the middle of a chain
+
+Cindy wrote the code that deals with the problem in which two FAT entries point to the same cluster chain
+
+Both Cindy and Junghyun worked on debugging the overall code.
+*/
+
+
 void print_indent(int indent)
 {
     int i;
@@ -265,7 +289,6 @@ int getclusterlen(uint16_t startCluster, uint8_t *image_buf, struct bpb33 *bpb, 
 				set_fat_entry (fatent, (FAT12_MASK & CLUST_EOFS), image_buf, bpb);
 				return clusterlen + 1;
 			} 
-			//printf("fatent: %u\n", fatent);
 			clusterlen++;
 		}
 	return clusterlen;
@@ -371,7 +394,7 @@ void unorphaner(int *refarr, int arrsize, uint8_t *image_buf, struct bpb33 *bpb)
 	 }
 }
 
-// from dos_ls.c file 
+// modified from dos_ls.c file 
 //traverses through a directory entry 
 void follow_dir(uint16_t cluster, int indent, uint8_t *image_buf, struct bpb33* bpb, int *refarr){
     
